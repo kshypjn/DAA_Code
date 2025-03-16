@@ -79,3 +79,10 @@ Think of it like this:
 
 4 1
 ```
+
+## How to Run : 
+Run these lines in the terminal
+```
+javac MaximalLayers.java 
+java MaximalLayers  
+```
