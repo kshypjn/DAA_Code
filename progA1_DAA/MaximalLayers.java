@@ -1,28 +1,29 @@
 import java.io.*;
 import java.util.*;
 
-/**
+/*
  * point class represents a 2d point with x and y coordinates.
- * points can be compared based on their y-coordinate, which is used 
- * when we need to sort points within each maximal layer.
+ * points are compared based on their y coordinate (used for sorting output).
  */
 class Point implements Comparable<Point> {
     int x, y;
-    // creates a new point with the given coordinates
+    
+    // creates a new point with the given x and y values
     public Point(int x, int y) {
         this.x = x;
         this.y = y;
     }
     
-    /**
+    /*
      * compares points based on their y coordinate.
-     * used when sorting points within a layer for the output.
-     * return negative if this point's y is less than other's y, positive if greater, zero if equal
+     * returns negative if this point's y is less than other's,
+     * positive if greater, and zero if they are equal.
      */
     @Override
     public int compareTo(Point other) {
         return Integer.compare(this.y, other.y);
     }
+    
     // returns the string representation of this point as "x y"
     @Override
     public String toString() {
@@ -30,28 +31,24 @@ class Point implements Comparable<Point> {
     }
 }
 
-/**
- * maximallayers class implements an algorithm to find maximal layers in a set s of 2d points.
- * maximal layer definition:
- * - a point p dominates point q if both x and y coordinates of p are greater than q
- * - points in the first layer are not dominated by any other point
- * - points in the second layer are only dominated by points in the first layer
- * - this pattern continues for all subsequent layers
- */
+
+//   this class implements the line-sweep algorithm to compute the maximal layers.
+//  it uses a multi staircase structure. for each new point (swept in descending x order),it uses binary search (which takes o(log n) time per point) over the current layers (tracked by the highest y value in each layer) to decide which layer the point belongs to.
+// if no current layer is suitable, a new layer is created.
+
 public class MaximalLayers {
-    // counter t for operations
+    // global counter t for operations (comparisons and arithmetic)
     static int T = 0;
     
     public static void main(String[] args) throws IOException {
-        // use try-with-resources to automatically close input and output files
         try (BufferedReader br = new BufferedReader(new FileReader("input.txt"));
              PrintWriter pw = new PrintWriter(new FileWriter("output.txt"))) {
             
-            // read number of points from first line
+            // read number of points from the first line
             int n = Integer.parseInt(br.readLine());
             List<Point> points = new ArrayList<>();
-
-            // read all points from input file
+            
+            // read all points from the input file
             for (int i = 0; i < n; i++) {
                 String[] parts = br.readLine().split(" ");
                 points.add(new Point(Integer.parseInt(parts[0]), Integer.parseInt(parts[1])));
@@ -60,108 +57,106 @@ public class MaximalLayers {
             // reset operation counter before starting the algorithm
             T = 0;
             
-            // compute maximal layers using our algorithm
-            List<List<Point>> layers = computeMaximalLayers(points);
+            // sort points by x coordinate in descending order
+            Collections.sort(points, Comparator.comparingInt((Point p) -> p.x).reversed());
+            T += points.size() * Math.log(points.size());
             
-            // write each layer to the output file
+            List<List<Point>> layers = new ArrayList<>();
+            List<Integer> layerTops = new ArrayList<>();
+            
+            // process each point in one sweep
+            for (Point p : points) {
+                // binary search for the first layer where p.y > current layer top.
+                // search for the smallest index such that p.y is greater than layertops.get(index)
+                int lo = 0, hi = layerTops.size();
+                // create a new layer if no layer qualifies
+                int pos = hi;
+                while (lo < hi) {
+                    int mid = (lo + hi) / 2;
+                    // count the binary search comparison - increment operation count
+                    T++; 
+                    if (p.y > layerTops.get(mid)) {
+                        pos = mid;
+                        hi = mid;
+                    } else {
+                        lo = mid + 1;
+                    }
+                }
+                
+                if (pos < layerTops.size()) {
+                    // add point p into the found layer and update that layer's top
+                    layers.get(pos).add(p);
+                    layerTops.set(pos, p.y);
+                } else {
+                    // if no layer qualifies, create a new layer with point p
+                    List<Point> newLayer = new ArrayList<>();
+                    newLayer.add(p);
+                    layers.add(newLayer);
+                    layerTops.add(p.y);
+                }
+            }
+            
+            // before output, sort the points in each layer by ascending y coordinate
             for (int i = 0; i < layers.size(); i++) {
                 if (i > 0) {
                     pw.println();
                 }
-                // sort points in ascending order (each layer by y coordinate)
                 Collections.sort(layers.get(i));
-                
-                // print all points in current layer
-                for (Point p : layers.get(i)) {
-                    pw.println(p);
+                for (Point pt : layers.get(i)) {
+                    pw.println(pt);
                 }
             }
             pw.println();
             System.out.println("total operations (t) for n=" + n + ": " + T);
         }
-        
-        // analyze performance using try-with-resources in the method
+
         analyzePerformance();
     }
     
-    /**
-     * computes maximal layers from a set of points using an efficient algorithm.
-     * 
-     * how the algorithm works:
-     * 1. sort all points by x-coordinate in descending order
-     * 2. for each layer, take the first point (highest x)
-     * 3. add other points to the current layer only if they have higher y-values
-     *    than any point already in the layer (this ensures no dominance)
-     * 4. repeat until all points are assigned to layers
-     * 
-     * @return list of maximal layers, where each layer is a list of points
-     */
-    private static List<List<Point>> computeMaximalLayers(List<Point> points) {
-        List<List<Point>> layers = new ArrayList<>();
-        // empty input case handled
-        if (points.isEmpty()) {
-            return layers;
-        }
-        
-        // sort points by x coordinate (highest to lowest)
-        Collections.sort(points, Comparator.comparingInt((Point p) -> p.x).reversed());
-        T += points.size() * Math.log(points.size()); 
-        
-        // creating a working copy of points
-        List<Point> remainingPoints = new ArrayList<>(points);
-        
-        // process layers one by one until all points are assigned
-        while (!remainingPoints.isEmpty()) {
-            List<Point> currentLayer = new ArrayList<>();
-            List<Point> pointsForNextLayer = new ArrayList<>();
-            
-            // the point with highest x value always belongs to current layer  (it cannot be dominated by any remaining point)
-            Point firstPoint = remainingPoints.get(0);
-            currentLayer.add(firstPoint);
-            int highestY = firstPoint.y;
-            
-            // process the remaining points
-            for (int i = 1; i < remainingPoints.size(); i++) {
-                Point currentPoint = remainingPoints.get(i);
-                // add this to count of operations
-                T++; 
-                
-                // if this point has a higher y value than any in the current layer, it belongs in this layer because it cannot be dominated
-                if (currentPoint.y > highestY) {
-                    currentLayer.add(currentPoint);
-                    highestY = currentPoint.y; // update highest y value in this layer
-                } else {
-                    // else this point is dominated and goes to next layer
-                    pointsForNextLayer.add(currentPoint);
-                }
-            }
-            
-            // add the current layer to the result and continue with remaining points
-            layers.add(currentLayer);
-            remainingPoints = pointsForNextLayer;
-        }
-        
-        return layers;
-    }
-    
-    // analyzes algorithm performance for different input sizes.
-
+    // analyzes algorithm performance for different input sizes
     private static void analyzePerformance() {
-        
         try (PrintWriter dataWriter = new PrintWriter(new FileWriter("performance_data.csv"))) {
             dataWriter.println("n,operations");
             
-            // test with different input sizes from 10 to 1000 points
+            // test with input sizes from 10 to 1000 points
             for (int n = 10; n <= 1000; n += 50) {
-                // generate a test set with n random points
                 List<Point> randomPoints = generateRandomPoints(n);
                 
                 // reset operation counter for this test
                 T = 0;
                 
-                // run the algorithm and measure operations
-                computeMaximalLayers(randomPoints);
-    
+                // sort points by descending x coordinate
+                Collections.sort(randomPoints, Comparator.comparingInt((Point p) -> p.x).reversed());
+                T += randomPoints.size() * Math.log(randomPoints.size());
+                
+                // compute maximal layers using the new method
+                List<List<Point>> layers = new ArrayList<>();
+                List<Integer> layerTops = new ArrayList<>();
+                for (Point p : randomPoints) {
+                    int lo = 0, hi = layerTops.size();
+                    int pos = hi;
+                    while (lo < hi) {
+                        int mid = (lo + hi) / 2;
+                        T++;
+                        if (p.y > layerTops.get(mid)) {
+                            pos = mid;
+                            hi = mid;
+                        } else {
+                            lo = mid + 1;
+                        }
+                    }
+                    
+                    if (pos < layerTops.size()) {
+                        layers.get(pos).add(p);
+                        layerTops.set(pos, p.y);
+                    } else {
+                        List<Point> newLayer = new ArrayList<>();
+                        newLayer.add(p);
+                        layers.add(newLayer);
+                        layerTops.add(p.y);
+                    }
+                }
+                
                 dataWriter.println(n + "," + T);
                 System.out.println("input size n = " + n + ", operations t = " + T);
             }
@@ -170,13 +165,12 @@ public class MaximalLayers {
         }
     }
     
-    // random points generator
+    // generates n random points with coordinates in the range [0, 1000]
     private static List<Point> generateRandomPoints(int n) {
         List<Point> points = new ArrayList<>();
         Random random = new Random(42); 
         
         for (int i = 0; i < n; i++) {
-            // random coordinates in range [0, 1000]
             int x = random.nextInt(1001);
             int y = random.nextInt(1001);
             points.add(new Point(x, y));
