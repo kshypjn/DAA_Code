@@ -1,5 +1,0 @@
-To create a graph of the performance data:
-1. Open the performance_data.csv file in a spreadsheet program like Excel or Google Sheets
-2. Select the data and create a scatter plot
-3. Add a trendline to visualize the growth rate
-4. Label the x-axis as 'n (number of points)' and y-axis as 'T (operations)'

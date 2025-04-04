@@ -61,7 +61,9 @@ public class MaximalLayers {
             Collections.sort(points, Comparator.comparingInt((Point p) -> p.x).reversed());
             T += points.size() * Math.log(points.size());
             
+            // layers - store points in each max layer
             List<List<Point>> layers = new ArrayList<>();
+            // layerTops to track the highest y-coordinate in each layer
             List<Integer> layerTops = new ArrayList<>();
             
             // process each point in one sweep
